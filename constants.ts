@@ -33,6 +33,103 @@ export const ASPECT_RATIOS = [
   '9:16'
 ];
 
+// Watermark Constants
+export const WATERMARK_TYPES = [
+  { value: 'subtle_text', label: 'Subtle Text' },
+  { value: 'signature', label: 'Signature' },
+  { value: 'logo_text', label: 'Logo + Text' },
+  { value: 'edge', label: 'Edge' },
+  { value: 'pattern', label: 'Pattern' },
+  { value: 'hidden', label: 'Hidden' }
+];
+
+export const BRAND_TONES = [
+  { value: 'personal', label: 'Personal' },
+  { value: 'professional', label: 'Professional' },
+  { value: 'premium', label: 'Premium' }
+];
+
+export const PLATFORMS = [
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'website', label: 'Website' }
+];
+
+export const IMAGE_STYLES = [
+  { value: 'portrait_ai', label: 'Portrait AI' },
+  { value: 'lifestyle', label: 'Lifestyle' },
+  { value: 'infographic', label: 'Infographic' },
+  { value: 'thumbnail', label: 'Thumbnail' },
+  { value: 'product', label: 'Product' }
+];
+
+export const WATERMARK_POSITIONS = [
+  { value: 'auto', label: 'Auto (Smart Placement)' },
+  { value: 'bottom_right', label: 'Bottom Right' },
+  { value: 'bottom_left', label: 'Bottom Left' },
+  { value: 'top_right', label: 'Top Right' },
+  { value: 'top_left', label: 'Top Left' },
+  { value: 'center', label: 'Center' },
+  { value: 'edge', label: 'Edge' },
+  { value: 'tile_grid', label: 'Tile Grid (Lưới)' },
+  { value: 'tile_brick', label: 'Tile Brick (Sole)' }
+];
+
+export const COLOR_MODES = [
+  { value: 'adaptive', label: 'Adaptive' },
+  { value: 'white', label: 'White' },
+  { value: 'black', label: 'Black' },
+  { value: 'brand_color', label: 'Brand Color' }
+];
+
+export const DEFAULT_WATERMARK_CONFIG = {
+  watermarkText: '@tranvanhoang.com',
+  watermarkType: 'subtle_text' as const,
+  brandTone: 'personal' as const,
+  platform: 'instagram' as const,
+  imageStyle: 'portrait_ai' as const,
+  position: 'auto' as const,
+  opacity: 0.08,
+  fontSize: 40,
+  rotation: 0,
+  colorMode: 'adaptive' as const,
+  repeatPattern: false,
+  avoidFaces: true
+};
+
+export const WATERMARK_PRESETS = {
+  personal_branding: {
+    name: '🎯 Personal Branding (Instagram)',
+    config: {
+      watermarkType: 'subtle_text' as const,
+      opacity: 0.07,
+      fontSize: 30,
+      position: 'bottom_right' as const,
+      colorMode: 'adaptive' as const,
+      avoidFaces: true
+    }
+  },
+  anti_repost: {
+    name: '🎯 AI Image – Anti Repost',
+    config: {
+      watermarkType: 'hidden' as const,
+      opacity: 0.05,
+      repeatPattern: false,
+      brandTone: 'premium' as const
+    }
+  },
+  infographic: {
+    name: '🎯 Infographic / Educational',
+    config: {
+      watermarkType: 'edge' as const,
+      opacity: 0.1,
+      fontSize: 50
+    }
+  }
+};
+
 export const MOCK_USER = {
   id: 'usr_123456',
   name: 'Demo User',

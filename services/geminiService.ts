@@ -506,3 +506,156 @@ Return ONLY valid JSON, no explanations.
     throw error;
   }
 };
+
+/**
+ * PROMPT 5: Apply Watermark to Image using AI
+ */
+export const applyWatermark = async (
+  base64Image: string,
+  config: {
+    watermarkText: string;
+    watermarkType: 'subtle_text' | 'signature' | 'logo_text' | 'edge' | 'pattern' | 'hidden';
+    brandTone: 'personal' | 'professional' | 'premium';
+    platform: 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'website';
+    imageStyle: 'portrait_ai' | 'lifestyle' | 'infographic' | 'thumbnail' | 'product';
+    position: 'auto' | 'bottom_right' | 'bottom_left' | 'top_right' | 'top_left' | 'edge';
+    opacity: number;
+    scaleRatio: number;
+    rotation: number;
+    colorMode: 'adaptive' | 'white' | 'black' | 'brand_color';
+    repeatPattern: boolean;
+    avoidFaces: boolean;
+  }
+): Promise<string> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API Key is missing.");
+  }
+
+  const modelName = GeminiModel.FLASH_IMAGE;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  // Build watermark style rules based on type
+  const getStyleRules = () => {
+    switch (config.watermarkType) {
+      case 'subtle_text':
+        return `Font: clean, thin, sans-serif. Opacity: ${Math.round(config.opacity * 100)}%. Single instance only. Very subtle.`;
+      case 'signature':
+        return `Handwritten/script style. Very small scale. Opacity: ${Math.round(config.opacity * 100)}%. Elegant and personal.`;
+      case 'logo_text':
+        return `Flat monochrome logo-style text. Minimal size. Opacity: ${Math.round(config.opacity * 100)}%.`;
+      case 'edge':
+        return `Place along image edge (vertical or horizontal strip). Do not intrude into main canvas. Opacity: ${Math.round(config.opacity * 100)}%.`;
+      case 'pattern':
+        return `Repeat watermark diagonally across image. Rotation: ${config.rotation || 15} degrees. Opacity: ${Math.round(config.opacity * 100)}%. Multiple instances.`;
+      case 'hidden':
+        return `Blend watermark into existing textures (wall, clothing, desk, background). Must look like natural part of the image. Opacity: ${Math.round(config.opacity * 100)}%.`;
+      default:
+        return `Subtle, non-intrusive. Opacity: ${Math.round(config.opacity * 100)}%.`;
+    }
+  };
+
+  // Build color instruction
+  const getColorInstruction = () => {
+    switch (config.colorMode) {
+      case 'adaptive':
+        return 'Sample the background color at watermark placement area. Choose watermark color with low contrast but visible outline. Blend naturally.';
+      case 'white':
+        return 'Use pure white or off-white color for the watermark.';
+      case 'black':
+        return 'Use pure black or dark gray color for the watermark.';
+      case 'brand_color':
+        return 'Use a subtle brand-appropriate color that matches the overall image tone.';
+      default:
+        return 'Use adaptive color that blends with the background.';
+    }
+  };
+
+  // Build position instruction
+  const getPositionInstruction = () => {
+    if (config.position === 'auto') {
+      return 'SMART PLACEMENT: Analyze the image focal points and place watermark in the lowest visual-density corner. Respect safe zone margins of 5% from edges.';
+    }
+    const positionMap: Record<string, string> = {
+      'bottom_right': 'Place in the bottom right corner',
+      'bottom_left': 'Place in the bottom left corner',
+      'top_right': 'Place in the top right corner',
+      'top_left': 'Place in the top left corner',
+      'edge': 'Place along the bottom edge or right edge as a strip'
+    };
+    return positionMap[config.position] || 'Place in bottom right corner';
+  };
+
+  const prompt = `
+[ROLE]: World-Class Image Processing & Branding AI
+[OBJECTIVE]: Add a subtle, social-media-friendly watermark to this image that protects brand identity without reducing visual appeal or engagement.
+
+[WATERMARK TEXT]: "${config.watermarkText}"
+
+[WATERMARK CONFIGURATION]:
+- Type: ${config.watermarkType}
+- Style Rules: ${getStyleRules()}
+- Position: ${getPositionInstruction()}
+- Scale: ${Math.round(config.scaleRatio * 100)}% relative to image width
+- Color: ${getColorInstruction()}
+${config.repeatPattern ? '- Pattern: Repeat watermark diagonally across the image' : ''}
+${config.avoidFaces ? '- CRITICAL: Do NOT overlap faces, eyes, mouth, or key emotional elements' : ''}
+
+[VISUAL PRIORITY RULES]:
+1. The main subject (face, object, headline) must remain completely untouched and fully visible.
+2. Watermark must be noticeable only after a second look - subtle but present.
+3. No harsh contrast, no thick fonts, no solid blocks.
+4. The watermark must look intentional, elegant, and non-intrusive.
+
+[PLATFORM OPTIMIZATION]: ${config.platform}
+[IMAGE STYLE]: ${config.imageStyle}
+[BRAND TONE]: ${config.brandTone}
+
+[TECHNICAL REQUIREMENTS]:
+- Preserve original image quality, lighting, skin tone, and sharpness.
+- Do NOT crop or resize the image.
+- Do NOT distort the watermark text.
+- The watermark should blend naturally with the image aesthetic.
+
+Apply the watermark now according to these specifications.
+`;
+
+  try {
+    const cleanBase64 = base64Image.includes(',')
+      ? base64Image.split(',')[1]
+      : base64Image;
+
+    console.log('🔍 applyWatermark - Config:', {
+      text: config.watermarkText,
+      type: config.watermarkType,
+      position: config.position,
+      opacity: config.opacity
+    });
+
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: 'image/png',
+              data: cleanBase64,
+            },
+          },
+        ],
+      },
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        console.log('✅ Watermark applied successfully');
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+    }
+
+    throw new Error("No image generated from watermark application.");
+  } catch (error) {
+    console.error("Gemini Watermark Error:", error);
+    throw error;
+  }
+};

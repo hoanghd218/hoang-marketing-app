@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Sidebar, Monitor, Grid, LogOut, Wand2, RefreshCcw, Layers, Image as ImageIcon, Cloud, Check, Download, FileImage, FileText, Copy, Youtube, Sparkles, Upload, X, Type, BrainCircuit, Palette, LayoutTemplate, User as UserIcon, AlertCircle, Plus, Trash, Crop } from 'lucide-react';
+import { Layout, Sidebar, Monitor, Grid, LogOut, Wand2, RefreshCcw, Layers, Image as ImageIcon, Cloud, Check, Download, FileImage, FileText, Copy, Youtube, Sparkles, Upload, X, Type, BrainCircuit, Palette, LayoutTemplate, User as UserIcon, AlertCircle, Plus, Trash, Crop, Droplet } from 'lucide-react';
 import { Button } from './components/Button';
 import { Input, Select, TextArea } from './components/Input';
 import { Gallery } from './components/Gallery';
 import { ImageCropper } from './components/ImageCropper';
-import { GeneratedImage, ThumbnailConfig, User, ViewMode, GeminiModel } from './types';
-import { AUDIENCES, EMOTIONS, VISUAL_STUN_GUN, LAYOUTS, EXPRESSIONS, TEXT_STYLES, TEXT_GOALS, STYLES, ASPECT_RATIOS, MOCK_USER } from './constants';
+import { WatermarkResult } from './components/WatermarkResult';
+import { GeneratedImage, ThumbnailConfig, User, ViewMode, GeminiModel, WatermarkConfig } from './types';
+import { AUDIENCES, EMOTIONS, VISUAL_STUN_GUN, LAYOUTS, EXPRESSIONS, TEXT_STYLES, TEXT_GOALS, STYLES, ASPECT_RATIOS, MOCK_USER, WATERMARK_TYPES, BRAND_TONES, PLATFORMS, IMAGE_STYLES, WATERMARK_POSITIONS, COLOR_MODES, DEFAULT_WATERMARK_CONFIG, WATERMARK_PRESETS } from './constants';
 import { generateThumbnail, editThumbnail, generateVideoMetadata, generateOptimizedPrompt, generateFormSuggestions } from './services/geminiService';
 import { saveImageToDrive } from './services/googleDriveService';
-import { compressImage, sanitizeFilename } from './utils/imageUtils';
+import { compressImage, sanitizeFilename, applyWatermarkCanvas } from './utils/imageUtils';
 
 const App: React.FC = () => {
   // State
@@ -69,8 +70,97 @@ const App: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [isApplyingWatermark, setIsApplyingWatermark] = useState(false);
+
+  // Watermark State
+  const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>(DEFAULT_WATERMARK_CONFIG);
+  const [selectedImageForWatermark, setSelectedImageForWatermark] = useState<GeneratedImage | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const [editPrompt, setEditPrompt] = useState('');
+
+  // Live Preview Effect
+  useEffect(() => {
+    if (!selectedImageForWatermark || !watermarkConfig.watermarkText.trim()) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsPreviewLoading(true);
+      try {
+        const watermarkOptions = {
+          text: watermarkConfig.watermarkText,
+          position: watermarkConfig.position === 'edge' ? 'bottom_right' as const : watermarkConfig.position,
+          opacity: watermarkConfig.opacity,
+          fontSize: watermarkConfig.fontSize,
+          color: watermarkConfig.colorMode === 'adaptive' ? 'adaptive' as const
+            : watermarkConfig.colorMode === 'white' ? 'white' as const
+              : watermarkConfig.colorMode === 'black' ? 'black' as const
+                : 'adaptive' as const,
+          type: watermarkConfig.watermarkType === 'pattern' ? 'pattern' as const
+            : watermarkConfig.watermarkType === 'signature' ? 'signature' as const
+              : 'subtle_text' as const,
+          rotation: watermarkConfig.rotation
+        };
+
+        // Fix position mapping if using new detailed positions
+        if (['tile_grid', 'tile_brick', 'center', 'edge'].includes(watermarkConfig.position)) {
+          // These are supported directly by our updated applyWatermarkCanvas
+          // We just need to cast them to satisfy TypeScript if the mapping above was too restrictive
+          (watermarkOptions as any).position = watermarkConfig.position;
+        }
+
+        const url = await applyWatermarkCanvas(selectedImageForWatermark.url, watermarkOptions as any);
+        setPreviewUrl(url);
+      } catch (e) {
+        console.error("Preview generation failed", e);
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [watermarkConfig, selectedImageForWatermark]);
+
+  const handleApplyWatermark = async () => {
+    if (!selectedImageForWatermark) {
+      alert("Please select an image to watermark first.");
+      return;
+    }
+
+    // If we have a preview, use it directly to save time
+    const finalUrl = previewUrl || selectedImageForWatermark.url;
+
+    if (!previewUrl) {
+      // Should generally be covered by effect, but safety check
+      if (!watermarkConfig.watermarkText.trim()) {
+        alert("Please enter watermark text.");
+        return;
+      }
+    }
+
+    try {
+      const newImage: GeneratedImage = {
+        id: Date.now().toString(),
+        url: finalUrl,
+        prompt: `Watermark: ${watermarkConfig.watermarkText}`,
+        title: `${selectedImageForWatermark.title || 'Image'} (Watermarked)`,
+        createdAt: Date.now(),
+        type: 'edited',
+        aspectRatio: selectedImageForWatermark.aspectRatio
+      };
+
+      setGeneratedImages(prev => [newImage, ...prev]);
+      setActiveImage(newImage);
+      // Keep selection active for iterative edits
+      alert("Saved to gallery!");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save. Please try again.");
+    }
+  };
 
   // Description State
   const [descTopic, setDescTopic] = useState('');
@@ -454,6 +544,17 @@ const App: React.FC = () => {
     }
   };
 
+
+
+  const handleApplyPreset = (presetKey: keyof typeof WATERMARK_PRESETS) => {
+    const preset = WATERMARK_PRESETS[presetKey];
+    setWatermarkConfig(prev => ({ ...prev, ...preset.config }));
+  };
+
+  const handleSelectImageForWatermark = (img: GeneratedImage) => {
+    setSelectedImageForWatermark(img);
+  };
+
   return (
     <div className="flex h-screen w-full bg-slate-50 text-slate-900 overflow-hidden font-sans">
       {/* Cropper Modal */}
@@ -495,6 +596,14 @@ const App: React.FC = () => {
             <Grid size={24} />
             <span className="text-[10px] font-medium">Gallery</span>
           </button>
+
+          <button
+            onClick={() => setCurrentView(ViewMode.WATERMARK)}
+            className={`p-3 rounded-xl transition-all duration-200 flex flex-col items-center gap-1 ${currentView === ViewMode.WATERMARK ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-slate-400 hover:bg-slate-100'}`}
+          >
+            <Droplet size={24} />
+            <span className="text-[10px] font-medium">Watermark</span>
+          </button>
         </nav>
 
         <div className="mt-auto flex flex-col gap-4">
@@ -519,6 +628,7 @@ const App: React.FC = () => {
               <h2 className="text-xl font-bold font-mono text-slate-900 flex items-center gap-2">
                 {currentView === ViewMode.GENERATE && 'PSYCHOLOGY_FLOW'}
                 {currentView === ViewMode.EDIT && 'EDIT_MODE'}
+                {currentView === ViewMode.WATERMARK && 'WATERMARK_STUDIO'}
                 <div className="h-2 w-2 bg-blue-600 rounded-full animate-pulse"></div>
               </h2>
             </div>
@@ -916,6 +1026,253 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {currentView === ViewMode.WATERMARK && (
+                <div className="space-y-6">
+                  {/* Presets */}
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 p-2 rounded-lg">
+                      <Sparkles size={14} /> Quick Presets
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {Object.entries(WATERMARK_PRESETS).map(([key, preset]) => (
+                        <Button
+                          key={key}
+                          variant="secondary"
+                          onClick={() => handleApplyPreset(key as keyof typeof WATERMARK_PRESETS)}
+                          className="w-full justify-start text-left text-sm"
+                        >
+                          {preset.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* Select Image */}
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 p-2 rounded-lg">
+                      <ImageIcon size={14} /> 1. Upload Image
+                    </div>
+                    {selectedImageForWatermark ? (
+                      <div className="relative">
+                        <div className="w-full rounded-lg overflow-hidden bg-slate-200 border border-slate-300" style={{ aspectRatio: (selectedImageForWatermark.aspectRatio || '16:9').replace(':', '/') }}>
+                          <img
+                            src={previewUrl || selectedImageForWatermark.url}
+                            className={`w-full h-full object-cover transition-opacity duration-300 ${isPreviewLoading ? 'opacity-80' : 'opacity-100'}`}
+                            alt="Selected"
+                          />
+                          {isPreviewLoading && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                              <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedImageForWatermark(null);
+                            setPreviewUrl(null);
+                          }}
+                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 z-10"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Upload Button */}
+                        <label className="flex flex-col items-center justify-center w-full h-32 cursor-pointer rounded-lg border-2 border-dashed border-blue-300 hover:border-blue-400 hover:bg-blue-50 bg-slate-50 transition-all group">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  const base64String = reader.result as string;
+                                  setSelectedImageForWatermark({
+                                    id: Date.now().toString(),
+                                    url: base64String,
+                                    prompt: 'Uploaded for watermark',
+                                    createdAt: Date.now(),
+                                    type: 'generated',
+                                    aspectRatio: '16:9'
+                                  });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                          <Upload size={28} className="text-blue-400 group-hover:text-blue-500 mb-2" />
+                          <span className="text-sm font-medium text-blue-600 group-hover:text-blue-700">Click to upload image</span>
+                          <span className="text-xs text-slate-400 mt-1">PNG, JPG, WEBP</span>
+                        </label>
+
+                        {/* Or select from gallery */}
+                        {generatedImages.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-slate-500 text-center">— or select from gallery —</p>
+                            <div className="grid grid-cols-4 gap-2 max-h-24 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                              {generatedImages.slice(0, 8).map((img) => (
+                                <div
+                                  key={img.id}
+                                  className="aspect-square cursor-pointer rounded-md overflow-hidden border border-slate-200 hover:border-blue-400 hover:ring-2 hover:ring-blue-200 transition-all"
+                                  onClick={() => handleSelectImageForWatermark(img)}
+                                >
+                                  <img src={img.url} className="w-full h-full object-cover" alt="Select" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Watermark Text */}
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 p-2 rounded-lg">
+                      <Type size={14} /> 2. Watermark Text
+                    </div>
+                    <Input
+                      label="Watermark Text"
+                      value={watermarkConfig.watermarkText}
+                      onChange={(e) => setWatermarkConfig({ ...watermarkConfig, watermarkText: e.target.value })}
+                      placeholder="@username or brand name"
+                    />
+                  </section>
+
+                  {/* Type & Position */}
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 p-2 rounded-lg">
+                      <LayoutTemplate size={14} /> 3. Style & Position
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Select
+                        label="Type"
+                        options={WATERMARK_TYPES.map(t => t.label)}
+                        value={WATERMARK_TYPES.find(t => t.value === watermarkConfig.watermarkType)?.label || ''}
+                        onChange={(e) => {
+                          const selected = WATERMARK_TYPES.find(t => t.label === e.target.value);
+                          if (selected) setWatermarkConfig({ ...watermarkConfig, watermarkType: selected.value as any });
+                        }}
+                      />
+                      <Select
+                        label="Position"
+                        options={WATERMARK_POSITIONS.map(p => p.label)}
+                        value={WATERMARK_POSITIONS.find(p => p.value === watermarkConfig.position)?.label || ''}
+                        onChange={(e) => {
+                          const selected = WATERMARK_POSITIONS.find(p => p.label === e.target.value);
+                          if (selected) setWatermarkConfig({ ...watermarkConfig, position: selected.value as any });
+                        }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Select
+                        label="Color Mode"
+                        options={COLOR_MODES.map(c => c.label)}
+                        value={COLOR_MODES.find(c => c.value === watermarkConfig.colorMode)?.label || ''}
+                        onChange={(e) => {
+                          const selected = COLOR_MODES.find(c => c.label === e.target.value);
+                          if (selected) setWatermarkConfig({ ...watermarkConfig, colorMode: selected.value as any });
+                        }}
+                      />
+                      <Select
+                        label="Platform"
+                        options={PLATFORMS.map(p => p.label)}
+                        value={PLATFORMS.find(p => p.value === watermarkConfig.platform)?.label || ''}
+                        onChange={(e) => {
+                          const selected = PLATFORMS.find(p => p.label === e.target.value);
+                          if (selected) setWatermarkConfig({ ...watermarkConfig, platform: selected.value as any });
+                        }}
+                      />
+                    </div>
+                  </section>
+
+                  {/* Opacity & Scale & Rotation */}
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 p-2 rounded-lg">
+                      <Palette size={14} /> 4. Adjustments
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Opacity: {Math.round(watermarkConfig.opacity * 100)}%</label>
+                        <input
+                          type="range"
+                          min="3"
+                          max="100"
+                          value={watermarkConfig.opacity * 100}
+                          onChange={(e) => setWatermarkConfig({ ...watermarkConfig, opacity: Number(e.target.value) / 100 })}
+                          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Text Size: {watermarkConfig.fontSize}px</label>
+                        <input
+                          type="range"
+                          min="10"
+                          max="300"
+                          value={watermarkConfig.fontSize}
+                          onChange={(e) => setWatermarkConfig({ ...watermarkConfig, fontSize: Number(e.target.value) })}
+                          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Rotation: {watermarkConfig.rotation}°</label>
+                        <input
+                          type="range"
+                          min="-180"
+                          max="180"
+                          value={watermarkConfig.rotation}
+                          onChange={(e) => setWatermarkConfig({ ...watermarkConfig, rotation: Number(e.target.value) })}
+                          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Advanced Options */}
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 p-2 rounded-lg">
+                      <BrainCircuit size={14} /> 5. Advanced Options
+                    </div>
+                    <div className="space-y-2">
+                      <label className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-slate-50 p-2 rounded">
+                        <input
+                          type="checkbox"
+                          checked={watermarkConfig.avoidFaces}
+                          onChange={(e) => setWatermarkConfig({ ...watermarkConfig, avoidFaces: e.target.checked })}
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>Avoid Faces & Focal Points</span>
+                      </label>
+                      <label className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-slate-50 p-2 rounded">
+                        <input
+                          type="checkbox"
+                          checked={watermarkConfig.repeatPattern}
+                          onChange={(e) => setWatermarkConfig({ ...watermarkConfig, repeatPattern: e.target.checked })}
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>Repeat Pattern (for pattern type)</span>
+                      </label>
+                    </div>
+                  </section>
+
+                  {/* Apply Button */}
+                  <div className="sticky bottom-0 bg-white/95 pt-4 pb-2 border-t border-slate-100">
+                    <Button
+                      onClick={handleApplyWatermark}
+                      disabled={!selectedImageForWatermark || !watermarkConfig.watermarkText.trim()}
+                      isLoading={isApplyingWatermark}
+                      className="w-full h-12 text-lg shadow-lg shadow-blue-500/20 bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500"
+                      icon={<Download size={20} />}
+                    >
+                      SAVE COPY
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -937,98 +1294,112 @@ const App: React.FC = () => {
             <div className="flex-1 flex flex-col p-8 overflow-y-auto scroll-smooth">
 
               {/* IMAGE FEED SECTION */}
-              <div className="mb-12 flex flex-col items-center justify-center w-full">
+              {currentView === ViewMode.WATERMARK ? (
+                <WatermarkResult
+                  previewUrl={previewUrl}
+                  selectedImage={selectedImageForWatermark}
+                  isLoading={isPreviewLoading}
+                  onSave={handleApplyWatermark}
+                  isSaving={isApplyingWatermark}
+                  onClear={() => {
+                    setSelectedImageForWatermark(null);
+                    setPreviewUrl(null);
+                  }}
+                />
+              ) : (
+                <div className="mb-12 flex flex-col items-center justify-center w-full">
 
-                {/* 1. Loading State */}
-                {isGenThumbnail && (
-                  <div className="mb-12 w-full max-w-5xl flex flex-col gap-4 items-center justify-center min-h-[300px] border-2 border-dashed border-blue-200 rounded-xl bg-blue-50/50 animate-pulse transition-all">
-                    <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                    <p className="text-blue-600 font-mono font-bold tracking-widest">ANALYZING PSYCHOLOGY & GENERATING PIXELS...</p>
-                  </div>
-                )}
+                  {/* 1. Loading State */}
+                  {isGenThumbnail && (
+                    <div className="mb-12 w-full max-w-5xl flex flex-col gap-4 items-center justify-center min-h-[300px] border-2 border-dashed border-blue-200 rounded-xl bg-blue-50/50 animate-pulse transition-all">
+                      <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                      <p className="text-blue-600 font-mono font-bold tracking-widest">ANALYZING PSYCHOLOGY & GENERATING PIXELS...</p>
+                    </div>
+                  )}
 
-                {/* 2. Image Feed */}
-                {generatedImages.length > 0 ? (
-                  <div className="flex flex-col gap-16 w-full items-center">
-                    {generatedImages.map((img) => (
-                      <div key={img.id} className={`w-full flex flex-col gap-4 ${img.aspectRatio === '9:16' ? 'max-w-md' : 'max-w-5xl'}`}>
-                        {/* Status/Header for Image Card */}
-                        <div className="flex items-center justify-between px-2">
-                          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{new Date(img.createdAt).toLocaleTimeString()}</span>
-                          <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-1 rounded-full uppercase font-bold">{img.type}</span>
-                        </div>
+                  {/* 2. Image Feed */}
+                  {generatedImages.length > 0 ? (
+                    <div className="flex flex-col gap-16 w-full items-center">
+                      {generatedImages.map((img) => (
+                        <div key={img.id} className={`w-full flex flex-col gap-4 ${img.aspectRatio === '9:16' ? 'max-w-md' : 'max-w-5xl'}`}>
+                          {/* Status/Header for Image Card */}
+                          <div className="flex items-center justify-between px-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{new Date(img.createdAt).toLocaleTimeString()}</span>
+                            <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-1 rounded-full uppercase font-bold">{img.type}</span>
+                          </div>
 
-                        <div
-                          className="relative group w-full shadow-xl rounded-xl overflow-hidden border border-slate-200 bg-white transition-all duration-300 hover:shadow-2xl"
-                          style={{ aspectRatio: (img.aspectRatio || '16:9').replace(':', '/') }}
-                        >
-                          <img src={img.url} className="w-full h-full object-contain" alt="Result" />
+                          <div
+                            className="relative group w-full shadow-xl rounded-xl overflow-hidden border border-slate-200 bg-white transition-all duration-300 hover:shadow-2xl"
+                            style={{ aspectRatio: (img.aspectRatio || '16:9').replace(':', '/') }}
+                          >
+                            <img src={img.url} className="w-full h-full object-contain" alt="Result" />
 
-                          {/* Overlay Actions */}
-                          <div className="absolute top-4 right-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <Button
-                              variant="secondary"
-                              onClick={() => handleSaveToDrive(img)}
-                              isLoading={savingId === img.id}
-                              className={`!p-2 backdrop-blur shadow-sm ${saveSuccessId === img.id ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white/90'}`}
-                            >
-                              {saveSuccessId === img.id ? (
-                                <><span className="mr-2 text-xs">SAVED</span> <Check size={16} /></>
-                              ) : (
-                                <><span className="mr-2 text-xs">SAVE TO DRIVE</span> <Cloud size={16} /></>
-                              )}
-                            </Button>
-
-                            <div className="flex gap-2">
-                              <Button variant="secondary" onClick={() => handleDownload(img, false)} className="!p-2 bg-white/90 backdrop-blur shadow-sm flex-1" title="Download Original">
-                                <span className="mr-2 text-xs">PNG</span> <Download size={16} />
-                              </Button>
+                            {/* Overlay Actions */}
+                            <div className="absolute top-4 right-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                               <Button
                                 variant="secondary"
-                                onClick={() => handleDownload(img, true)}
-                                isLoading={compressingId === img.id}
-                                className="!p-2 bg-white/90 backdrop-blur shadow-sm flex-1"
-                                title="Download Compressed (<2MB)"
+                                onClick={() => handleSaveToDrive(img)}
+                                isLoading={savingId === img.id}
+                                className={`!p-2 backdrop-blur shadow-sm ${saveSuccessId === img.id ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white/90'}`}
                               >
-                                <span className="mr-2 text-xs">JPG</span> <FileImage size={16} />
+                                {saveSuccessId === img.id ? (
+                                  <><span className="mr-2 text-xs">SAVED</span> <Check size={16} /></>
+                                ) : (
+                                  <><span className="mr-2 text-xs">SAVE TO DRIVE</span> <Cloud size={16} /></>
+                                )}
+                              </Button>
+
+                              <div className="flex gap-2">
+                                <Button variant="secondary" onClick={() => handleDownload(img, false)} className="!p-2 bg-white/90 backdrop-blur shadow-sm flex-1" title="Download Original">
+                                  <span className="mr-2 text-xs">PNG</span> <Download size={16} />
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => handleDownload(img, true)}
+                                  isLoading={compressingId === img.id}
+                                  className="!p-2 bg-white/90 backdrop-blur shadow-sm flex-1"
+                                  title="Download Compressed (<2MB)"
+                                >
+                                  <span className="mr-2 text-xs">JPG</span> <FileImage size={16} />
+                                </Button>
+                              </div>
+
+                              <Button
+                                variant="secondary"
+                                onClick={() => handleSelectEdit(img)}
+                                className="!p-2 bg-white/90 backdrop-blur shadow-sm mt-1 text-blue-600 border-blue-100 hover:bg-blue-50"
+                                title="Use for Editing"
+                              >
+                                <span className="mr-2 text-xs">EDIT THIS</span> <Wand2 size={16} />
                               </Button>
                             </div>
+                          </div>
 
-                            <Button
-                              variant="secondary"
-                              onClick={() => handleSelectEdit(img)}
-                              className="!p-2 bg-white/90 backdrop-blur shadow-sm mt-1 text-blue-600 border-blue-100 hover:bg-blue-50"
-                              title="Use for Editing"
-                            >
-                              <span className="mr-2 text-xs">EDIT THIS</span> <Wand2 size={16} />
-                            </Button>
+                          {/* Prompt/Analysis Display */}
+                          <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                            <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                              <Wand2 size={14} /> AI Creative Brief (Analysis & Prompt)
+                            </h3>
+                            <div className="text-xs text-slate-600 font-mono leading-relaxed break-words whitespace-pre-wrap select-all bg-slate-50 p-2 rounded border border-slate-100">
+                              {img.prompt}
+                            </div>
                           </div>
                         </div>
-
-                        {/* Prompt/Analysis Display */}
-                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-                          <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                            <Wand2 size={14} /> AI Creative Brief (Analysis & Prompt)
-                          </h3>
-                          <div className="text-xs text-slate-600 font-mono leading-relaxed break-words whitespace-pre-wrap select-all bg-slate-50 p-2 rounded border border-slate-100">
-                            {img.prompt}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  !isGenThumbnail && (
-                    <div className="flex flex-col items-center justify-center text-slate-400 w-full py-20 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                      <div className="w-24 h-24 mb-6 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center">
-                        <Monitor className="text-slate-400 w-10 h-10" />
-                      </div>
-                      <h3 className="text-xl font-medium text-slate-600">Studio Workspace</h3>
-                      <p className="text-sm mt-2 max-w-xs text-center text-slate-500">Fill out the Psychology Flow on the left to generate high-conversion thumbnails.</p>
+                      ))}
                     </div>
-                  )
-                )}
-              </div>
+                  ) : (
+                    !isGenThumbnail && (
+                      <div className="flex flex-col items-center justify-center text-slate-400 w-full py-20 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                        <div className="w-24 h-24 mb-6 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center">
+                          <Monitor className="text-slate-400 w-10 h-10" />
+                        </div>
+                        <h3 className="text-xl font-medium text-slate-600">Studio Workspace</h3>
+                        <p className="text-sm mt-2 max-w-xs text-center text-slate-500">Fill out the Psychology Flow on the left to generate high-conversion thumbnails.</p>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
 
               {/* METADATA RESULTS SECTION */}
               <div ref={metadataRef} className="max-w-5xl mx-auto w-full border-t border-slate-200 pt-8 mt-8">

@@ -54,6 +54,21 @@ export interface ThumbnailConfig {
   signature: string;
 }
 
+export interface WatermarkConfig {
+  watermarkText: string;
+  watermarkType: 'subtle_text' | 'signature' | 'logo_text' | 'edge' | 'pattern' | 'hidden';
+  brandTone: 'personal' | 'professional' | 'premium';
+  platform: 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'website';
+  imageStyle: 'portrait_ai' | 'lifestyle' | 'infographic' | 'thumbnail' | 'product';
+  position: 'auto' | 'bottom_right' | 'bottom_left' | 'top_right' | 'top_left' | 'center' | 'edge' | 'tile_grid' | 'tile_brick';
+  opacity: number;
+  fontSize: number;
+  rotation: number;
+  colorMode: 'adaptive' | 'white' | 'black' | 'brand_color';
+  repeatPattern: boolean;
+  avoidFaces: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -65,6 +80,7 @@ export enum ViewMode {
   GENERATE = 'GENERATE',
   EDIT = 'EDIT',
   GALLERY = 'GALLERY',
+  WATERMARK = 'WATERMARK',
 }
 
 export enum GeminiModel {
