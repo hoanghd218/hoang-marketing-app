@@ -1,34 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI YouTube Thumbnail Architect</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              mono: ['JetBrains Mono', 'monospace'],
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI YouTube Thumbnail Architect</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Exo:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500;700&display=swap"
+    rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Roboto Mono', 'monospace'], // Tech/Data feel
+            mono: ['Exo', 'sans-serif'],        // Futuristic Headings
+          },
+          colors: {
+            // Remap Blue to Electric Violet / AI Glow
+            blue: {
+              50: '#2e1065',  // violet-950 (Deep Tint)
+              100: '#4c1d95', // violet-900
+              200: '#5b21b6', // violet-800
+              300: '#6d28d9', // violet-700
+              400: '#7c3aed', // violet-600
+              500: '#8b5cf6', // violet-500 (Primary Glow)
+              600: '#a78bfa', // violet-400 (Light Hover)
+              700: '#c4b5fd', // violet-300
+              800: '#ddd6fe', // violet-200
+              900: '#ede9fe', // violet-100
             },
-            colors: {
-              cyber: {
-                900: '#f8fafc', // Now maps to slate-50
-                800: '#ffffff', // Now maps to white
-                700: '#e2e8f0', // Now maps to slate-200
-                500: '#2563eb', // Now maps to blue-600
-                400: '#3b82f6', // Now maps to blue-500
-              }
+            // INVERTED Slate Palette for Automatic Dark Mode via Mapping
+            // Old (Light) -> New (Dark)
+            slate: {
+              50: '#030712',  // Old bg-slate-50 -> gray-950 (Deep Dark Bg)
+              100: '#111827', // Old bg-slate-100 -> gray-900 (Surface)
+              200: '#1f2937', // Old border-slate-200 -> gray-800 (Border)
+              300: '#374151', // gray-700
+              400: '#4b5563', // gray-600
+              500: '#6b7280', // gray-500
+              600: '#9ca3af', // gray-400 (Muted Text)
+              700: '#cbd5e1', // gray-300 (Secondary Text)
+              800: '#e2e8f0', // gray-200
+              900: '#f8fafc', // Old text-slate-900 -> gray-50 (White Text)
+              950: '#ffffff', // Absolute white
+            },
+            // Update cyber specific mappings to Dark Mode
+            cyber: {
+              900: '#030712', // Main Bg (Dark)
+              800: '#111827', // Card Bg (Dark)
+              700: '#1f2937', // Border (Dark)
+              500: '#8b5cf6', // Primary (Violet)
+              400: '#a78bfa', // Secondary (Light Violet)
             }
           }
         }
       }
-    </script>
+    }
+  </script>
   <script type="importmap">
 {
   "imports": {
@@ -40,10 +72,12 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
+  <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-50 text-slate-900 antialiased overflow-hidden">
-    <div id="root"></div>
+
+<body class="bg-slate-50 text-slate-900 antialiased overflow-hidden">
+  <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>
