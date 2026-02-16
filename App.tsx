@@ -56,6 +56,7 @@ const App: React.FC = () => {
     versionCount: '1',
     // Misc
     uploadedLogo: null,
+    referenceLogos: [],
     aspectRatio: '16:9',
     signature: ''
   });
@@ -244,6 +245,18 @@ const App: React.FC = () => {
     // 7. Logo
     const logoInstruction = config.uploadedLogo ? 'Integrate the SECOND provided image (Logo) subtly in a corner (top left or top right), ensuring it looks like a watermark or brand element.' : '';
 
+    // 8. Reference Logos (Software logos)
+    const referenceLogosInstruction = config.referenceLogos && config.referenceLogos.length > 0
+      ? `CRITICAL — REFERENCE SOFTWARE LOGOS (${config.referenceLogos.length} image(s) provided after the character/logo images):
+    - You MUST include ALL ${config.referenceLogos.length} provided software logo(s) in the final thumbnail. They are MANDATORY, not optional.
+    - PRESERVE EXACT ORIGINAL COLORS of each logo icon — do NOT recolor, tint, desaturate, or apply any color filter to them.
+    - Display them as clearly visible, recognizable software/tool icons (NOT as watermarks or background elements).
+    - Each logo should be large enough to be instantly recognizable at thumbnail size.
+    - Place them in a visually balanced arrangement: along the bottom, beside the character, or as floating icons with subtle shadow/glow for contrast.
+    - Do NOT merge, blend, or artistically alter the logos. They must look like the exact original product icons.
+    - If the background would make a logo hard to see, add a subtle white/dark rounded container or glow behind it for visibility.`
+      : '';
+
     // CONSTRUCT FINAL PROMPT
     const newPrompt = `
     [ROLE]: Professional YouTube Thumbnail Designer & Strategist.
@@ -261,6 +274,7 @@ const App: React.FC = () => {
     ${textInstruction}
     ${styleInstruction}
     ${logoInstruction}
+    ${referenceLogosInstruction}
     
     [TECHNICAL RULES]:
     - Aspect Ratio: ${config.aspectRatio}
@@ -291,6 +305,32 @@ const App: React.FC = () => {
 
   const handleRemoveLogo = () => {
     setConfig(prev => ({ ...prev, uploadedLogo: null }));
+  };
+
+  // Reference Logos Handlers
+  const handleReferenceLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setConfig(prev => ({
+          ...prev,
+          referenceLogos: [...(prev.referenceLogos || []), base64String].slice(0, 5) // Max 5
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset input
+    e.target.value = '';
+  };
+
+  const handleRemoveReferenceLogo = (index: number) => {
+    setConfig(prev => ({
+      ...prev,
+      referenceLogos: (prev.referenceLogos || []).filter((_, i) => i !== index)
+    }));
   };
 
   // Library Interaction Handlers
@@ -352,7 +392,8 @@ const App: React.FC = () => {
           p,
           {
             character: config.hasCharacter ? config.characterImage : undefined,
-            logo: config.uploadedLogo
+            logo: config.uploadedLogo,
+            referenceLogos: config.referenceLogos && config.referenceLogos.length > 0 ? config.referenceLogos : undefined
           },
           GeminiModel.PRO_IMAGE,
           config.aspectRatio
@@ -944,6 +985,43 @@ const App: React.FC = () => {
                           <button onClick={handleRemoveLogo} className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X size={10} /></button>
                         </div>
                       )}
+                    </div>
+
+                    {/* Reference Logos (Software logos for thumbnail) */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-slate-500">Reference Logos (Optional)</label>
+                      <p className="text-xs text-slate-400">Upload software/tool logos to display in the thumbnail (max 5)</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {/* Upload Tile */}
+                        {(!config.referenceLogos || config.referenceLogos.length < 5) && (
+                          <label className="aspect-square cursor-pointer rounded-md border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center transition-all group">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={handleReferenceLogoUpload}
+                            />
+                            <Plus size={20} className="text-slate-400 group-hover:text-blue-500 mb-0.5" />
+                            <span className="text-[9px] text-slate-500 group-hover:text-blue-600 font-medium">Add Logo</span>
+                          </label>
+                        )}
+                        {/* Preview Tiles */}
+                        {(config.referenceLogos || []).map((logo, idx) => (
+                          <div
+                            key={idx}
+                            className="relative aspect-square rounded-md overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center group"
+                          >
+                            <img src={logo} alt={`Ref Logo ${idx + 1}`} className="max-h-full max-w-full object-contain p-1" />
+                            <button
+                              onClick={() => handleRemoveReferenceLogo(idx)}
+                              className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <Select
                       label="Aspect Ratio"

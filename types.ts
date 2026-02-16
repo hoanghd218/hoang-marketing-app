@@ -50,6 +50,7 @@ export interface ThumbnailConfig {
 
   // Legacy/Misc
   uploadedLogo?: string | null;
+  referenceLogos?: string[]; // Base64 images of software logos to include in thumbnail
   aspectRatio: string;
   signature: string;
 }

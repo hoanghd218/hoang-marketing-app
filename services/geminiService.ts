@@ -9,6 +9,7 @@ const cleanJson = (text: string): string => {
 interface ReferenceImages {
   character?: string | null;
   logo?: string | null;
+  referenceLogos?: string[]; // Software logos to include in thumbnail
 }
 
 export const generateThumbnail = async (
@@ -65,6 +66,23 @@ export const generateThumbnail = async (
           data: cleanBase64
         }
       });
+    }
+
+    // Add reference software logos
+    if (referenceImages.referenceLogos && referenceImages.referenceLogos.length > 0) {
+      for (const refLogo of referenceImages.referenceLogos) {
+        const cleanBase64 = refLogo.includes(',')
+          ? refLogo.split(',')[1]
+          : refLogo;
+
+        parts.push({
+          inlineData: {
+            mimeType: 'image/png',
+            data: cleanBase64
+          }
+        });
+      }
+      console.log(`✅ ${referenceImages.referenceLogos.length} reference logo(s) ADDED to parts array`);
     }
 
     console.log('📤 Total parts being sent to API:', parts.length);
@@ -284,7 +302,7 @@ export const generateOptimizedPrompt = async (config: any): Promise<string> => {
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelName = GeminiModel.FLASH_TEXT;
+  const modelName = "gemini-3-flash-preview";
 
   let imagePart = null;
   if (config.characterImage) {
@@ -387,6 +405,17 @@ TEXT OVERLAY (MUST BE PERFECT):
 - Must be HUGE, BOLD, ultra legible, topmost layer, not covered by any object.
 - Add CTR treatment: thick stroke/outline + drop shadow + high contrast vs background.
 
+${config.referenceLogos && config.referenceLogos.length > 0 ? `
+CRITICAL PRIORITY — REFERENCE SOFTWARE LOGOS:
+- ${config.referenceLogos.length} software logo image(s) are provided as reference.
+- You MUST include ALL of them visibly in the generated thumbnail.
+- PRESERVE the EXACT ORIGINAL COLORS of each logo — do NOT recolor, tint, desaturate, stylize, or apply any filter.
+- Display them as clearly recognizable software/tool product icons, NOT as watermarks.
+- Each logo must be large enough to be instantly identifiable at thumbnail size.
+- Place them in a balanced arrangement (bottom row, beside character, or floating with glow/shadow).
+- Add a subtle container (rounded white/dark background) if needed for visibility against the scene.
+- The prompt you generate MUST explicitly instruct the image model to reproduce these exact logos with their original colors.
+` : ''}
 OUTPUT REQUIREMENTS:
 - Return ONLY the final raw image prompt text (no explanations, no headings, no bullet points).
 - Must be a single cohesive prompt that Nano Banana Pro can render.
@@ -397,6 +426,21 @@ OUTPUT REQUIREMENTS:
     const parts: any[] = [{ text: prompt }];
     if (imagePart) {
       parts.push(imagePart);
+    }
+
+    // Add reference logos to the optimize prompt call too
+    if (config.referenceLogos && config.referenceLogos.length > 0) {
+      for (const refLogo of config.referenceLogos) {
+        const cleanBase64 = refLogo.includes(',')
+          ? refLogo.split(',')[1]
+          : refLogo;
+        parts.push({
+          inlineData: {
+            mimeType: 'image/png',
+            data: cleanBase64
+          }
+        });
+      }
     }
 
     const response = await ai.models.generateContent({
